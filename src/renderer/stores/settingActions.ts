@@ -1,54 +1,107 @@
 import { getDefaultStore } from 'jotai'
 import * as atoms from './atoms'
-import * as defaults from '../../shared/defaults'
-import { Settings } from '../../shared/types'
+import { Settings, ModelProvider } from '../../shared/types'
 
 export function modify(update: Partial<Settings>) {
-    const store = getDefaultStore()
-    store.set(atoms.settingsAtom, (settings) => ({
-        ...settings,
-        ...update,
-    }))
+  const store = getDefaultStore()
+  store.set(atoms.settingsAtom, (settings) => ({
+    ...settings,
+    ...update,
+  }))
 }
 
 export function needEditSetting() {
-    const store = getDefaultStore()
-    const settings = store.get(atoms.settingsAtom)
-    if (settings.aiProvider === 'chatbox-ai' && !settings.licenseKey) {
-        return true
-    }
-    if (
-        settings.aiProvider === 'openai' &&
-        settings.openaiKey === '' &&
-        settings.apiHost === defaults.settings().apiHost
-    ) {
-        return true
-    }
-    if (settings.aiProvider === 'ollama' && !settings.ollamaModel) {
-        return true
-    }
+  const store = getDefaultStore()
+  const settings = store.get(atoms.settingsAtom)
+
+  // 激活了chatbox ai
+  if (settings.licenseKey) {
     return false
+  }
+
+  if (settings.providers && Object.keys(settings.providers).length > 0) {
+    const providers = settings.providers
+    const keys = Object.keys(settings.providers)
+    // 有任何一个供应商配置了api key
+    if (keys.filter((key) => !!providers[key].apiKey).length > 0) {
+      return false
+    }
+    // Ollama / LMStudio/ custom provider 配置了至少一个模型
+    if (
+      keys.filter(
+        (key) =>
+          (key === ModelProvider.Ollama || key === ModelProvider.LMStudio || key.startsWith('custom-provider')) &&
+          providers[key].models?.length
+      ).length > 0
+    ) {
+      return false
+    }
+  }
+  return true
 }
 
 export function getLanguage() {
-    const store = getDefaultStore()
-    const settings = store.get(atoms.settingsAtom)
-    return settings.language
+  const store = getDefaultStore()
+  const settings = store.get(atoms.settingsAtom)
+  return settings.language
 }
 
 export function getProxy() {
-    const store = getDefaultStore()
-    const settings = store.get(atoms.settingsAtom)
-    return settings.proxy
+  const store = getDefaultStore()
+  const settings = store.get(atoms.settingsAtom)
+  return settings.proxy
 }
 
 export function getLicenseKey() {
-    const store = getDefaultStore()
-    const settings = store.get(atoms.settingsAtom)
-    return settings.licenseKey
+  const store = getDefaultStore()
+  const settings = store.get(atoms.settingsAtom)
+  return settings.licenseKey
+}
+
+export function getRemoteConfig() {
+  const store = getDefaultStore()
+  return store.get(atoms.remoteConfigAtom)
+}
+
+export function getSettings() {
+  const store = getDefaultStore()
+  return store.get(atoms.settingsAtom)
 }
 
 export function getAutoGenerateTitle() {
-    const store = getDefaultStore()
-    return store.get(atoms.autoGenerateTitleAtom)
+  const store = getDefaultStore()
+  return store.get(atoms.autoGenerateTitleAtom)
+}
+
+export function setModelProvider(provider: ModelProvider) {
+  const store = getDefaultStore()
+  store.set(atoms.settingsAtom, (settings) => ({
+    ...settings,
+    aiProvider: provider,
+  }))
+}
+
+export function getExtensionSettings() {
+  const store = getDefaultStore()
+  return store.get(atoms.settingsAtom).extension
+}
+
+export function createCustomProvider() {
+  // TODO: Uncomment and implement this function
+  // const newCustomProvider: CustomProvider = {
+  //   id: `custom-provider-${Date.now()}`,
+  //   name: 'Untitled',
+  //   api: 'openai',
+  //   host: 'https://api.openai.com/v1',
+  //   path: '/chat/completions',
+  //   key: '',
+  //   model: 'gpt-4o',
+  // }
+  // const store = getDefaultStore()
+  // store.set(atoms.settingsAtom, (settings) => ({
+  //   ...settings,
+  //   aiProvider: ModelProvider.Custom,
+  //   selectedCustomProviderId: newCustomProvider.id,
+  //   customProviders: [newCustomProvider, ...settings.customProviders],
+  // }))
 }

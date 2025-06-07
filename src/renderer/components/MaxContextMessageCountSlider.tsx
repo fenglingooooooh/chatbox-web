@@ -1,65 +1,129 @@
-import { TextField, Slider, Typography, Box } from '@mui/material'
+import { Flex, Slider, Stack, Text, TextInput, Tooltip } from '@mantine/core'
+import { IconInfoCircle } from '@tabler/icons-react'
+import { ChangeEvent, KeyboardEvent, useCallback, useMemo, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 
-export interface Props {
-    value: number
-    onChange(value: number): void
-    className?: string
+export function toBeRemoved_getContextMessageCount(
+  openaiMaxContextMessageCount: number,
+  maxContextMessageCount?: number
+) {
+  return typeof maxContextMessageCount === 'number'
+    ? maxContextMessageCount
+    : openaiMaxContextMessageCount > 20
+    ? Number.MAX_SAFE_INTEGER
+    : openaiMaxContextMessageCount
 }
 
-export default function MaxContextMessageCountSlider(props: Props) {
-    const { t } = useTranslation()
-    return (
-        <Box sx={{ margin: '10px' }} className={props.className}>
-            <Box>
-                <Typography id="discrete-slider" gutterBottom>
-                    {t('Max Message Count in Context')}
-                </Typography>
-            </Box>
-            <Box
-                sx={{
-                    display: 'flex',
-                    justifyContent: 'center',
-                    margin: '0 auto',
-                }}
-            >
-                <Box sx={{ width: '92%' }}>
-                    <Slider
-                        value={props.value}
-                        onChange={(_event, value) => {
-                            const v = Array.isArray(value) ? value[0] : value
-                            props.onChange(v)
-                        }}
-                        aria-labelledby="discrete-slider"
-                        valueLabelDisplay="auto"
-                        step={2}
-                        min={0}
-                        max={22}
-                        marks
-                        valueLabelFormat={(value) => {
-                            if (value === 22) {
-                                return t('No Limit')
-                            }
-                            return value
-                        }}
-                    />
-                </Box>
-                <TextField
-                    sx={{ marginLeft: 2, width: '100px' }}
-                    value={props.value > 20 ? t('No Limit') : props.value}
-                    onChange={(event) => {
-                        const s = event.target.value.trim()
-                        const v = parseInt(s)
-                        if (isNaN(v)) {
-                            return
-                        }
-                        props.onChange(v)
-                    }}
-                    type="text"
-                    size="small"
-                    variant="outlined"
-                />
-            </Box>
-        </Box>
-    )
+export interface Props {
+  value: number
+  onChange(value: number): void
+  className?: string
+}
+
+const MESSAGE_COUNT_OPTIONS = [0, 2, 4, 6, 8, 10, 20, 50, 100, 200, 500, Number.MAX_SAFE_INTEGER]
+export default function MaxContextMessageCountSlider({ value, onChange, className }: Props) {
+  const { t } = useTranslation()
+
+  const [tempSliderValue, setTempSliderValue] = useState<number>()
+  const sliderValue = useMemo(() => {
+    if (typeof tempSliderValue === 'number') {
+      return tempSliderValue
+    } else {
+      if (value < 0) {
+        return 0
+      } else if (MESSAGE_COUNT_OPTIONS.includes(value)) {
+        return MESSAGE_COUNT_OPTIONS.indexOf(value)
+      } else {
+        const i = MESSAGE_COUNT_OPTIONS.findLastIndex((v) => v < value)
+        return (value - MESSAGE_COUNT_OPTIONS[i]) / (MESSAGE_COUNT_OPTIONS[i + 1] - MESSAGE_COUNT_OPTIONS[i]) + i
+      }
+    }
+  }, [tempSliderValue, value])
+  const handleSliderChange = useCallback((v: number) => {
+    setTempSliderValue(v)
+  }, [])
+  const handleSliderChangeEnd = useCallback((v: number) => {
+    // 有概率会出现SliderChangeEnd事件之后又产生一个SliderChange，所以延时处理
+    setTimeout(() => {
+      setTempSliderValue(undefined)
+      onChange?.(MESSAGE_COUNT_OPTIONS[v])
+    }, 100)
+  }, [])
+
+  const [tempInputValue, setTempInputValue] = useState<string>()
+  const inputValue = useMemo(() => {
+    if (typeof tempInputValue === 'string') {
+      return tempInputValue
+    }
+    const v = typeof tempSliderValue === 'number' ? MESSAGE_COUNT_OPTIONS[tempSliderValue] : value
+    return `${v === Number.MAX_SAFE_INTEGER ? t('No Limit') : v}`
+  }, [tempInputValue, value, tempSliderValue])
+  const handleInputChange = useCallback((e: ChangeEvent<HTMLInputElement>) => {
+    const v = e.currentTarget.value
+    setTempInputValue(v)
+  }, [])
+  const handleInputBlur = useCallback(() => {
+    if (tempInputValue) {
+      const v = parseInt(tempInputValue)
+      if (v >= 0) {
+        onChange?.(v)
+      }
+    }
+    setTempInputValue(undefined)
+  }, [tempInputValue])
+  const handleInputKeyUp = useCallback((e: KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === 'Enter') {
+      e.currentTarget.blur()
+    }
+  }, [])
+
+  return (
+    <Stack gap="xs">
+      <Flex align="center" gap="xs">
+        <Text size="sm" fw={'600'}>
+          {t('Max Message Count in Context')}
+        </Text>
+        <Tooltip
+          label={t(
+            'Regulate the volume of historical messages sent to the AI, striking a harmonious balance between depth of comprehension and the efficiency of responses.'
+          )}
+          withArrow={true}
+          maw={320}
+          className="!whitespace-normal"
+          zIndex={3000}
+        >
+          <IconInfoCircle size={20} className="text-[var(--mantine-color-chatbox-tertiary-text)]" />
+        </Tooltip>
+      </Flex>
+      <Flex gap="sm" align="center" className={className}>
+        <Slider
+          flex={1}
+          step={1}
+          min={0}
+          max={MESSAGE_COUNT_OPTIONS.length - 1}
+          label={(v) => {
+            if (v === MESSAGE_COUNT_OPTIONS.indexOf(Number.MAX_SAFE_INTEGER)) {
+              return t('No Limit')
+            }
+            return MESSAGE_COUNT_OPTIONS[v] ?? value
+          }}
+          marks={Array.from({ length: MESSAGE_COUNT_OPTIONS.length }).map((_, i) => ({ value: i }))}
+          value={sliderValue}
+          onChange={handleSliderChange}
+          onChangeEnd={handleSliderChangeEnd}
+        />
+        <TextInput
+          w={56}
+          size="sm"
+          value={inputValue}
+          onChange={handleInputChange}
+          onBlur={handleInputBlur}
+          onKeyUp={handleInputKeyUp}
+          classNames={{
+            input: '!text-center !px-0',
+          }}
+        />
+      </Flex>
+    </Stack>
+  )
 }
